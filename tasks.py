@@ -183,13 +183,41 @@ class NewsCrawlerBot:
                 self.get_news_info()
         except Exception as e:
             logger.warning("Stopped getting the news reason: %s", e)
+        self.create_output_work_item()
 
-        workitems = WorkItems()
-        excel_path = self.save_to_excel(self.news_list)
-        workitems.get_input_work_item()
-        if excel_path:
-            workitems.create_output_work_item(files=excel_path,save=True)
+    def extract_image_paths(self):
+        """
+            Extracts image paths from the news list.
 
+            Returns:
+            - image_paths (list): A list of image file paths.
+        """
+        image_paths = []
+        for news_item in self.news_list:
+            if "img_path" in news_item and news_item["img_path"]:
+                image_paths.append(news_item["img_path"])
+        return image_paths
+
+    def create_output_work_item(self):
+        """
+            Create output work items with the paths of the Excel file and images.
+        """
+        try:
+            excel_path = self.save_to_excel(self.news_list)
+            image_paths = self.extract_image_paths()
+
+            workitems = WorkItems()
+            workitems.get_input_work_item()
+
+            if excel_path:
+                files = [excel_path] + image_paths
+                workitems.create_output_work_item(files=files, save=True)
+                logger.info("Output work item created with Excel file and images.")
+            else:
+                logger.warning("No Excel file was created, skipping output work item creation.")
+
+        except Exception as e:
+            logger.error("Failed to create output work item: %s", e)        
 
     def close_popup(self):
         """
@@ -389,9 +417,9 @@ class NewsCrawlerBot:
         """
         try:
             self.open_browser()
-            time.sleep(5)
+            # time.sleep(5)
             self.search()
-            time.sleep(5)
+            # time.sleep(5)
             self.get_every_news()
         except Exception as e:
             logger.error("Failed to run the bot: %s", e)
@@ -405,11 +433,9 @@ def run_robot():
     item = workitems.get_input_work_item()
     try:
         payload = item.payload
-        print(payload)
         category = payload["category"]
         search_phrase = payload["search_phrase"]
         time_option = payload["time_option"]
-
         assert isinstance(category, str), "Category must be a string"
         assert isinstance(search_phrase, str), "Search phrase must be a string"
         assert isinstance(time_option, int) and time_option > 0, "Time option must be an integer greater than 0"
