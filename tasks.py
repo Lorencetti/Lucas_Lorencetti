@@ -77,6 +77,7 @@ class NewsCrawlerBot:
             Opens the WebDriver
         """
         try:
+            self.selenium_instance.set_selenium_page_load_timeout(30)
             self.selenium_instance.open_chrome_browser(self.url)
             logger.info("Browser opened successfully!")
         except Exception as e:
