@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
-from robocorp.tasks import get_output_dir, task
+from robocorp.tasks import task
 from RPA.Browser.Selenium import Selenium
 from RPA.Robocorp.WorkItems import WorkItems
 
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S',
                     handlers=[
-                        logging.FileHandler("news_crawler.log"),
+                        logging.FileHandler("./output/news_crawler.log"),
                         logging.StreamHandler()
                     ])
 logger = logging.getLogger(__name__)
@@ -184,6 +184,7 @@ class NewsCrawlerBot:
 
         workitems = WorkItems()
         excel_path = self.save_to_excel(self.news_list)
+
         if excel_path:
             workitems.create_output_work_item(files=excel_path,save=True)
 
@@ -363,7 +364,6 @@ class NewsCrawlerBot:
         """
         try:
             save_dir = os.path.join(os.getcwd(), 'output')
-            os.makedirs(save_dir, exist_ok=True)
             file_path = os.path.join(save_dir, "result.xlsx")
 
             wb = Workbook()
@@ -400,11 +400,11 @@ def run_robot():
         Initialize and runs the robot with the given work items as inputs.
     """
     workitems = WorkItems()
-    item = workitems.get_work_item_payload()
+    item = workitems.get_input_work_item()
     try:
-        category = item["category"]
-        search_phrase = item["search_phrase"]
-        time_option = item["time_option"]
+        category = item.payload["category"]
+        search_phrase = item.payload["search_phrase"]
+        time_option = item.payload["time_option"]
 
         assert isinstance(category, str), "Category must be a string"
         assert isinstance(search_phrase, str), "Search phrase must be a string"
@@ -414,8 +414,7 @@ def run_robot():
     except KeyError as err:
         item.fail("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
     except Exception as err:
-        item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err))
-    
+        item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err)) 
     bot = NewsCrawlerBot(url="https://apnews.com/",
                           category=category, time_option=time_option, search_phrase=search_phrase)
     bot.run()
