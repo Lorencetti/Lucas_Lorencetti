@@ -89,6 +89,7 @@ class NewsCrawlerBot:
             Search the previously defined search phrase.
         """
         try:
+            self.selenium_instance.click_button_when_visible("css:#onetrust-accept-btn-handler")
             self.selenium_instance.click_button_when_visible("class:SearchOverlay-search-button")
             self.selenium_instance.input_text_when_element_is_visible(
                 "class:SearchOverlay-search-input", self.category)
