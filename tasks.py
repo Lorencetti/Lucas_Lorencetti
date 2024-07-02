@@ -6,9 +6,9 @@ import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
-from robocorp.tasks import task
+from robocorp.tasks import get_output_dir, task
 from RPA.Browser.Selenium import Selenium
-from robocorp import workitems
+from RPA.Robocorp.WorkItems import WorkItems
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO,
@@ -173,7 +173,6 @@ class NewsCrawlerBot:
             page_index_text = self.selenium_instance.get_webelement(
                 "class:Pagination-pageCounts").text
             total_pages = int(page_index_text.split(" of ")[1].replace(",", "").strip())
-
             self.get_news_info()
 
             for i in range(1, total_pages):
@@ -183,9 +182,12 @@ class NewsCrawlerBot:
         except Exception as e:
             logger.warning("Stopped getting the news reason: %s", e)
 
-        self.save_to_excel(self.news_list,
-            r"C:\Users\lucas\OneDrive\Área de Trabalho\RPA_challenge\output.xlsx")
-        
+        workitems = WorkItems()
+        excel_path = self.save_to_excel(self.news_list)
+        if excel_path:
+            workitems.create_output_work_item(files=excel_path,save=True)
+
+
     def close_popup(self):
         """
             Close the advertisiment popup
@@ -342,28 +344,27 @@ class NewsCrawlerBot:
             response.raise_for_status()  # Check if the request was successful
             with open(save_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
-                    file.write(chunk)
+                    file.write(chunk)  
             logger.info("Image successfully downloaded and saved to %s", save_path)
             return save_path
         except requests.exceptions.RequestException as e:
             logger.warning("Failed to download image: %s", e)
             return None
 
-    def save_to_excel(self, data_list: list, file_name: str):
+    def save_to_excel(self, data_list: list):
         """
             Save a list of dictionaries to an Excel file.
 
             Args:
             - data_list (list[dict]): List of dictionaries where each one represents a row of data.
-            - file_name (str): Name of the Excel file to be saved.
 
             Returns:
-            - bool: True if successful, False otherwise.
+            - file_path: The path where the generated excel file is located.
         """
         try:
-            save_dir = os.path.join(os.getcwd(), 'output', 'excel_file')
+            save_dir = os.path.join(os.getcwd(), 'output')
             os.makedirs(save_dir, exist_ok=True)
-            file_path = os.path.join(save_dir, file_name)
+            file_path = os.path.join(save_dir, "result.xlsx")
 
             wb = Workbook()
             ws = wb.active
@@ -374,11 +375,11 @@ class NewsCrawlerBot:
                     row_data = [item.get(header, '') for header in headers]
                     ws.append(row_data)
             wb.save(file_path)
-            return True
+            return file_path
     
         except Exception as e:
-            print("Failed to save Excel file: %s" % e)
-            return False
+            logger.error("Failed to save Excel file: %s", e)
+            return None
 
     def run(self):
         """
@@ -395,10 +396,28 @@ class NewsCrawlerBot:
 
 @task
 def run_robot():
+    """
+        Initialize and runs the robot with the given work items as inputs.
+    """
+    workitems = WorkItems()
+    workitems.get_input_work_item()
     for item in workitems.inputs:
-        print("Received payload:", item.payload)
-        workitems.outputs.create(payload={"test": "testing"})
+        try:
+            category = item.payload["category"]
+            search_phrase = item.payload["search_phrase"]
+            time_option = item.payload["time_option"]
+
+            assert isinstance(category, str), "Category must be a string"
+            assert isinstance(search_phrase, str), "Search phrase must be a string"
+            assert isinstance(time_option, int) and time_option > 0, "Time option must be an integer greater than 0"
+            item.done()
+        except AssertionError as err:
+            item.fail("BUSINESS", code="INVALID_INPUT", message=str(err))
+        except KeyError as err:
+            item.fail("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
+        except Exception as err:
+            item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err))
+    
     bot = NewsCrawlerBot(url="https://apnews.com/",
-                          category="money", time_option=2, search_phrase="New")
-    # workitems.outputs.create(payload={"key": "value"})
+                          category=category, time_option=time_option, search_phrase=search_phrase)
     bot.run()
