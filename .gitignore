@@ -15,4 +15,6 @@ temp/
 testrun/*
 .~lock*
 *.pkl
-.news_crawler.log
+news_crawler.log
+devdata/env.json
+news_crawler.log

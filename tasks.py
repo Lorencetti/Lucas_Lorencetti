@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
 from robocorp.tasks import task
 from RPA.Browser.Selenium import Selenium
+from robocorp import workitems
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO,
@@ -152,8 +153,7 @@ class NewsCrawlerBot:
                 news_dict['words_occurrences'] = words_occurrences
                 news_dict['contain_money'] = any(self.contains_money(news_dict[key]) for key in
                                                  ['description', 'title'])
-                news_dict["img_path"] = self.download_image(news_dict["img_path"],
-                    r"C:\Users\lucas\OneDrive\Área de Trabalho\RPA_challenge\img")
+                news_dict["img_path"] = self.download_image(news_dict["img_path"])
                 self.news_list.append(news_dict)
                 logger.info("Title: %s", news_dict['title'])
                 logger.info("Description: %s", news_dict['description'])
@@ -170,22 +170,22 @@ class NewsCrawlerBot:
         Get the news from every page after the initial category has been searched.
         """
         try:
-            page_index_text = self.selenium_instance.get_webelement("class:Pagination-pageCounts").text
+            page_index_text = self.selenium_instance.get_webelement(
+                "class:Pagination-pageCounts").text
             total_pages = int(page_index_text.split(" of ")[1].replace(",", "").strip())
 
             self.get_news_info()
-            time.sleep(3)
 
             for i in range(1, total_pages):
                 self.selenium_instance.click_element_when_clickable("class:Pagination-nextPage")
-                logger.info("Navigating to page umber: %i", i)
+                logger.info("Navigating to page number: %i", i)
                 self.get_news_info()
-                time.sleep(3)
         except Exception as e:
             logger.warning("Stopped getting the news reason: %s", e)
 
         self.save_to_excel(self.news_list,
             r"C:\Users\lucas\OneDrive\Área de Trabalho\RPA_challenge\output.xlsx")
+        
     def close_popup(self):
         """
             Close the advertisiment popup
@@ -221,7 +221,7 @@ class NewsCrawlerBot:
                       end_date.strftime('%Y/%m'))
         return start_date, end_date
 
-    def count_word_occurrences(self, text: str | None):
+    def count_word_occurrences(self, text):
         """
             Count the number of occurrences of a search_phrase in a text.
 
@@ -259,18 +259,16 @@ class NewsCrawlerBot:
 
     def parse_date_string(self, date_str: str):
         """
-            Parse the date string to a datetime object using regex patterns.
+        Parse the date string to a datetime object using regex patterns.
         """
         today = datetime.now().date()
         patterns = [
             r'(?i)now',
             r'(?i)yesterday',
-            r'(?i)(\d+) min ago',
-            r'(?i)(\d+) mins ago',
-            r'(?i)(\d+) hour ago',
-            r'(?i)(\d+) hours ago',
+            r'(?i)(\d+) min(?:s)? ago',
+            r'(?i)(\d+) hour(?:s)? ago',
+            r'(?i)(\w+) (\d+),? (\d{4})?',
             r'(?i)(\w+) (\d+)',
-            r'(?i)(\w+) (\d+), (\d{4})'
         ]
 
         for pattern in patterns:
@@ -278,34 +276,23 @@ class NewsCrawlerBot:
             if match:
                 if 'now' in pattern:
                     return datetime.now()
-                elif 'mins ago' in pattern or 'min ago' in pattern:
+                elif 'min' in pattern:
                     minutes = int(match.group(1))
                     return datetime.now() - timedelta(minutes=minutes)
-                elif 'hour ago' in pattern or 'hours ago' in pattern:
+                elif 'hour' in pattern:
                     hours = int(match.group(1))
                     return datetime.now() - timedelta(hours=hours)
                 elif 'yesterday' in pattern:
                     return datetime.combine(today - timedelta(days=1), datetime.min.time())
-                elif '(\w+) (\d+), (\d{4})' in pattern:
-                    try:
-                        return datetime.combine(datetime.strptime(date_str, "%B %d, %Y"),
-                                                 datetime.min.time())
-                    except ValueError as e:
-                        logger.warning("Failed to parse date string %s: %s",date_str,e)
-                        return None
-                else:
-                    try:
-                        return datetime.combine(datetime.strptime(
-                            date_str, "%B %d").replace(year=today.year),
-                                                 datetime.min.time())
-                    except ValueError as e:
-                        logger.warning("Failed to parse date string %s: %s",date_str,e)
-                        return None
-                
+                elif match.lastindex == 3:  # Month, Day, Year
+                    return datetime.combine(datetime.strptime(date_str, "%B %d, %Y"), datetime.min.time())
+                elif match.lastindex == 2:  # Month, Day
+                    return datetime.combine(datetime.strptime(date_str, "%B %d").replace(year=today.year), datetime.min.time())
+
         logger.warning("Failed to parse date string '%s': No matching pattern found", date_str)
         return None
     
-    def contains_money(self, text: str | None):
+    def contains_money(self, text):
         """
             Check if the given text contains any amount of money.
 
@@ -315,7 +302,7 @@ class NewsCrawlerBot:
             - 11 dollars
             - 11 USD
         """
-        if text is None: 
+        if text is None:
             return False
         money_patterns = [
             r'\$\d+(\.\d+)?',            # $11.1 or $111.11
@@ -329,26 +316,27 @@ class NewsCrawlerBot:
         else:
             return False
         
-    def download_image(self, url: str, save_dir: str):
+    def download_image(self, url: str):
         """
             Downloads an image from a given URL and saves it to the specified path.
 
             Parameters:
             url (str): The URL of the image to download.
-            save_dir (str): The file path to save the downloaded image.
             
             Returns: 
-            save_path (bool): The file path of the downloaded img.
-            None : Download failed or no url was given.
+            save_path (str): The file path of the downloaded image.
+            None : Download failed or no URL was given.
         """
         if url is None:
             return None
         
+        save_dir = os.path.join(os.getcwd(), 'output', 'Image')
         os.makedirs(save_dir, exist_ok=True)
         existing_files = os.listdir(save_dir)
         image_count = sum(1 for file in existing_files if file.startswith("image_") and file.endswith(".jpg"))
         image_name = f"image_{image_count + 1}.jpg"
         save_path = os.path.join(save_dir, image_name)
+        
         try:
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()  # Check if the request was successful
@@ -361,18 +349,22 @@ class NewsCrawlerBot:
             logger.warning("Failed to download image: %s", e)
             return None
 
-    def save_to_excel(self, data_list : list, file_path: str):
+    def save_to_excel(self, data_list: list, file_name: str):
         """
             Save a list of dictionaries to an Excel file.
 
             Args:
             - data_list (list[dict]): List of dictionaries where each one represents a row of data.
-            - file_path (str): File path to save the Excel file.
+            - file_name (str): Name of the Excel file to be saved.
 
             Returns:
             - bool: True if successful, False otherwise.
         """
         try:
+            save_dir = os.path.join(os.getcwd(), 'output', 'excel_file')
+            os.makedirs(save_dir, exist_ok=True)
+            file_path = os.path.join(save_dir, file_name)
+
             wb = Workbook()
             ws = wb.active
             if data_list:
@@ -383,9 +375,9 @@ class NewsCrawlerBot:
                     ws.append(row_data)
             wb.save(file_path)
             return True
-        
+    
         except Exception as e:
-            print("Failed to save Excel file: %s", e)
+            print("Failed to save Excel file: %s" % e)
             return False
 
     def run(self):
@@ -403,6 +395,10 @@ class NewsCrawlerBot:
 
 @task
 def run_robot():
+    for item in workitems.inputs:
+        print("Received payload:", item.payload)
+        workitems.outputs.create(payload={"test": "testing"})
     bot = NewsCrawlerBot(url="https://apnews.com/",
-                          category="hologram", time_option=3, search_phrase="US")
+                          category="money", time_option=2, search_phrase="New")
+    # workitems.outputs.create(payload={"key": "value"})
     bot.run()
