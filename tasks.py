@@ -400,23 +400,21 @@ def run_robot():
         Initialize and runs the robot with the given work items as inputs.
     """
     workitems = WorkItems()
-    workitems.get_input_work_item()
-    for item in workitems.inputs:
-        try:
-            category = item.payload["category"]
-            search_phrase = item.payload["search_phrase"]
-            time_option = item.payload["time_option"]
+    item = workitems.get_work_item_payload()
+    try:
+        category = item["category"]
+        search_phrase = item["search_phrase"]
+        time_option = item["time_option"]
 
-            assert isinstance(category, str), "Category must be a string"
-            assert isinstance(search_phrase, str), "Search phrase must be a string"
-            assert isinstance(time_option, int) and time_option > 0, "Time option must be an integer greater than 0"
-            item.done()
-        except AssertionError as err:
-            item.fail("BUSINESS", code="INVALID_INPUT", message=str(err))
-        except KeyError as err:
-            item.fail("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
-        except Exception as err:
-            item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err))
+        assert isinstance(category, str), "Category must be a string"
+        assert isinstance(search_phrase, str), "Search phrase must be a string"
+        assert isinstance(time_option, int) and time_option > 0, "Time option must be an integer greater than 0"
+    except AssertionError as err:
+        item.fail("BUSINESS", code="INVALID_INPUT", message=str(err))
+    except KeyError as err:
+        item.fail("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
+    except Exception as err:
+        item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err))
     
     bot = NewsCrawlerBot(url="https://apnews.com/",
                           category=category, time_option=time_option, search_phrase=search_phrase)
