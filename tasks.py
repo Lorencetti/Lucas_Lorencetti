@@ -77,7 +77,7 @@ class NewsCrawlerBot:
             Opens the WebDriver
         """
         try:
-            self.selenium_instance.open_chrome_browser(self.url, maximized=True)
+            self.selenium_instance.open_chrome_browser(self.url)
             logger.info("Browser opened successfully!")
         except Exception as e:
             logger.error("Failed to open the browser: %s", e)
@@ -184,7 +184,7 @@ class NewsCrawlerBot:
 
         workitems = WorkItems()
         excel_path = self.save_to_excel(self.news_list)
-
+        workitems.get_input_work_item()
         if excel_path:
             workitems.create_output_work_item(files=excel_path,save=True)
 
@@ -402,19 +402,21 @@ def run_robot():
     workitems = WorkItems()
     item = workitems.get_input_work_item()
     try:
-        category = item.payload["category"]
-        search_phrase = item.payload["search_phrase"]
-        time_option = item.payload["time_option"]
+        payload = item.payload
+        print(payload)
+        category = payload["category"]
+        search_phrase = payload["search_phrase"]
+        time_option = payload["time_option"]
 
         assert isinstance(category, str), "Category must be a string"
         assert isinstance(search_phrase, str), "Search phrase must be a string"
         assert isinstance(time_option, int) and time_option > 0, "Time option must be an integer greater than 0"
     except AssertionError as err:
-        item.fail("BUSINESS", code="INVALID_INPUT", message=str(err))
+        print("BUSINESS", code="INVALID_INPUT", message=str(err))
     except KeyError as err:
-        item.fail("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
+        print("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
     except Exception as err:
-        item.fail("APPLICATION", code="GENERAL_ERROR", message=str(err)) 
+        print("APPLICATION", code="GENERAL_ERROR", message=str(err)) 
     bot = NewsCrawlerBot(url="https://apnews.com/",
                           category=category, time_option=time_option, search_phrase=search_phrase)
     bot.run()
