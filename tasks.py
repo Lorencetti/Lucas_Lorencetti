@@ -1,9 +1,8 @@
-import time
+import os
+from datetime import datetime, timedelta
 import logging
 import re
 import requests
-import os
-from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
 from robocorp.tasks import task
@@ -104,8 +103,7 @@ class NewsCrawlerBot:
     @retry_on_failure('get_news_info')
     def get_news_info(self):
         """
-           Select the news according to its date and the time_option, 
-           and save its text on a dictionary
+            Select the news according to its date and the time_option, and save its content on a dictionary.
         """
         try:
             news_from_page = self.selenium_instance.get_webelements(
@@ -113,59 +111,91 @@ class NewsCrawlerBot:
             for article in news_from_page:
                 news_dict = {}
                 words_occurrences = 0
-                try:
-                    try:
-                        date_element = self.selenium_instance.get_webelement(
-                            "class:Timestamp-template", article)
-                    except Exception as e:
-                        logger.warning("Failed to get the date: %s", e)
-                        logger.info("Retrying to get it with the class Timestamp-template-now")
-                        date_element = self.selenium_instance.get_webelement(
-                            "class:Timestamp-template-now", article)
-                    news_dict['date'] = self.parse_date_string(date_element.text)
-                    if not self.is_within_month_interval(news_dict['date']):
-                        continue  # Skip to the next article if date is not within the interval
-                except Exception as e:
-                    logger.warning("Failed to get the date: %s", e)
-                    news_dict['date'] = None
-                try:
-                    father = self.selenium_instance.get_webelement(
-                        "class:PagePromo-media", article)
-                    img_path = self.selenium_instance.get_webelement(
-                        "class:Image", father)
-                    news_dict['img_path'] = img_path.get_attribute("src")
-                except Exception as e:
-                    logger.warning("Failed to get the image path: %s", e)
-                    news_dict['img_path'] = None
-                try:
-                    title = self.selenium_instance.get_webelement("class:PagePromo-title", article)
-                    news_dict['title'] = title.text
-                except Exception as e:
-                    logger.warning("Failed to get the title: %s", e)
-                    news_dict['title'] = None
-                try:
-                    description = self.selenium_instance.get_webelement(
-                        "class:PagePromo-description", article)
-                    news_dict['description'] = description.text
-                except Exception as e:
-                    logger.warning("Failed to get the description: %s", e)
-                    news_dict['description'] = None
+
+                news_dict['date'] = self.get_news_date(article)
+                if news_dict['date'] and not self.is_within_month_interval(news_dict['date']):
+                    continue  # Skip to the next article if date is not within the interval
+
+                news_dict['img_path'] = self.get_news_image_path(article)
+                news_dict['title'] = self.get_news_title(article)
+                news_dict['description'] = self.get_news_description(article)
+
                 words_occurrences += self.count_word_occurrences(news_dict['title'])
                 words_occurrences += self.count_word_occurrences(news_dict['description'])
                 news_dict['words_occurrences'] = words_occurrences
                 news_dict['contain_money'] = any(self.contains_money(news_dict[key]) for key in
                                                  ['description', 'title'])
                 news_dict["img_path"] = self.download_image(news_dict["img_path"])
+
                 self.news_list.append(news_dict)
-                logger.info("Title: %s", news_dict['title'])
-                logger.info("Description: %s", news_dict['description'])
-                logger.info("Date: %s", news_dict['date'])
-                logger.info("Image path: %s", news_dict["img_path"])
-                logger.info("Words occurrences: %s", news_dict['words_occurrences'])
-                logger.info("Contain money: %s", news_dict['contain_money'])
+                self.log_news_info(news_dict)
+
         except Exception as e:
             logger.warning("Failed to get the news: %s", e)
             raise  # Raise the exception to trigger the retry mechanism
+
+    def get_news_date(self, article):
+        """
+            Extract the date from the news article.
+        """
+        try:
+            try:
+                date_element = self.selenium_instance.get_webelement(
+                    "class:Timestamp-template", article)
+            except Exception as e:
+                logger.warning("Failed to get the date: %s", e)
+                logger.info("Retrying to get it with the class Timestamp-template-now")
+                date_element = self.selenium_instance.get_webelement(
+                    "class:Timestamp-template-now", article)
+            return self.parse_date_string(date_element.text)
+        except Exception as e:
+            logger.warning("Failed to get the date: %s", e)
+            return None
+
+    def get_news_image_path(self, article):
+        """
+            Extract the image path from the news article.
+        """
+        try:
+            father = self.selenium_instance.get_webelement("class:PagePromo-media", article)
+            img_path = self.selenium_instance.get_webelement("class:Image", father)
+            return img_path.get_attribute("src")
+        except Exception as e:
+            logger.warning("Failed to get the image path: %s", e)
+            return None
+
+    def get_news_title(self, article):
+        """
+            Extract the title from the news article.
+        """
+        try:
+            title = self.selenium_instance.get_webelement("class:PagePromo-title", article)
+            return title.text
+        except Exception as e:
+            logger.warning("Failed to get the title: %s", e)
+            return None
+
+    def get_news_description(self, article):
+        """
+            Extract the description from the news article.
+        """
+        try:
+            description = self.selenium_instance.get_webelement("class:PagePromo-description", article)
+            return description.text
+        except Exception as e:
+            logger.warning("Failed to get the description: %s", e)
+            return None
+
+    def log_news_info(self, news_dict):
+        """
+            Logs the information of the news article.
+        """
+        logger.info("Title: %s", news_dict['title'])
+        logger.info("Description: %s", news_dict['description'])
+        logger.info("Date: %s", news_dict['date'])
+        logger.info("Image path: %s", news_dict["img_path"])
+        logger.info("Words occurrences: %s", news_dict['words_occurrences'])
+        logger.info("Contain money: %s", news_dict['contain_money'])
 
     def get_every_news(self):
         """
@@ -183,7 +213,10 @@ class NewsCrawlerBot:
                 self.get_news_info()
         except Exception as e:
             logger.warning("Stopped getting the news reason: %s", e)
-        self.create_output_work_item()
+
+        # Not needed for this project, but this function would generate the output of images
+        # and the excel files as a Work Item on robocloud.
+        # self.create_output_work_item()
 
     def extract_image_paths(self):
         """
@@ -217,7 +250,7 @@ class NewsCrawlerBot:
                 logger.warning("No Excel file was created, skipping output work item creation.")
 
         except Exception as e:
-            logger.error("Failed to create output work item: %s", e)        
+            logger.error("Failed to create output work item: %s", e)
 
     def close_popup(self):
         """
@@ -264,7 +297,7 @@ class NewsCrawlerBot:
             Returns:
                 int: The number of occurrences of the search_phrase in the text.
         """
-        if text is None: 
+        if text is None:
             return 0
         pattern = rf'\b{re.escape(self.search_phrase)}\b'
         matches = re.findall(pattern, text, re.IGNORECASE)
@@ -274,6 +307,12 @@ class NewsCrawlerBot:
     def is_within_month_interval(self, parsed_date):
         """
             Check if the provided date string is within the current month interval.
+
+            Args:
+            - parsed_date: The previusly parsed date to be checked.
+
+            Returns:
+            - bool: True if the data is within the time_option data range, false otherwise.
         """
         try:
             if parsed_date is None:
@@ -287,12 +326,18 @@ class NewsCrawlerBot:
             else:
                 return False
         except Exception as e:
-            logger.warning("Failed to parse or compare date: %s", e)
+            logger.warning("Failed to compare date: %s", e)
             return False
 
     def parse_date_string(self, date_str: str):
         """
-        Parse the date string to a datetime object using regex patterns.
+            Parse the date string to a datetime object using regex patterns.
+
+            Args:
+            - date_str (str): The date to be parsed.
+
+            Returns:
+            - datetime: the parsed date in datetime.
         """
         today = datetime.now().date()
         patterns = [
@@ -334,6 +379,12 @@ class NewsCrawlerBot:
             - $111,111.11
             - 11 dollars
             - 11 USD
+
+            Args:
+            - text: The text to be checked.
+
+            Returns:
+            - bool: True if money on the given format was found, false otherwise.
         """
         if text is None:
             return False
@@ -363,7 +414,7 @@ class NewsCrawlerBot:
         if url is None:
             return None
         
-        save_dir = os.path.join(os.getcwd(), 'output', 'Image')
+        save_dir = os.path.join(os.getcwd(), 'output')
         os.makedirs(save_dir, exist_ok=True)
         existing_files = os.listdir(save_dir)
         image_count = sum(1 for file in existing_files if file.startswith("image_") and file.endswith(".jpg"))
@@ -417,9 +468,7 @@ class NewsCrawlerBot:
         """
         try:
             self.open_browser()
-            # time.sleep(5)
             self.search()
-            # time.sleep(5)
             self.get_every_news()
         except Exception as e:
             logger.error("Failed to run the bot: %s", e)
@@ -444,7 +493,7 @@ def run_robot():
     except KeyError as err:
         print("APPLICATION", code="MISSING_FIELD", message=f"Missing field: {err}")
     except Exception as err:
-        print("APPLICATION", code="GENERAL_ERROR", message=str(err)) 
+        print("APPLICATION", code="GENERAL_ERROR", message=str(err))
     bot = NewsCrawlerBot(url="https://apnews.com/",
                           category=category, time_option=time_option, search_phrase=search_phrase)
     bot.run()

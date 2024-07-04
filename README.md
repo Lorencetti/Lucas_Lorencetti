@@ -16,9 +16,9 @@ The challenge involves building a bot that automates data extraction from a chos
   - Article title
   - Publication date
   - Description
-  - Picture filename
+  - Patch to the downloaded picture (if it exists)
   - Count of search phrases
-  - Monetary values mentioned in the text
+  - Is there monetary values mentioned in the text? (True of False)
 
 ### Parameters
 
@@ -33,7 +33,7 @@ The bot processes three parameters provided via Robocloud work items:
 ### Process Flow
 
 1. **Open the Website**: Navigate to the chosen news website.
-2. **Filter by Category**: Enter the provided search phrase in the search field.
+2. **Filter by Category**: Enter the provided category in the search field.
 3. **Filter by Newest**: Select the newest from the dropdown menu, for easier data access.
 4. **Extract Articles**: Retrieve the latest news articles, getting only those that meet the specified time range.
 5. **Data Collection**:
