@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import logging
 import re
 import requests
+import zipfile
 from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
 from robocorp.tasks import task
@@ -214,6 +215,7 @@ class NewsCrawlerBot:
         except Exception as e:
             logger.warning("Stopped getting the news reason: %s", e)
 
+        self.zip_images_folder("./output/images")
         # Not needed for this project, but this function would generate the output of images
         # and the excel files as a Work Item on robocloud.
         # self.create_output_work_item()
@@ -399,7 +401,35 @@ class NewsCrawlerBot:
             return True
         else:
             return False
-        
+
+    def zip_images_folder(self, input_folder: str, 
+                          output_folder: str = "./output", zip_filename: str = "images.zip"):
+        """
+            Zips all images in the specified input folder and saves them on the output folder.
+
+            Args:
+            - input_folder (str): Path to the folder containing the images to zip.
+            - output_folder (str): Path to the folder where the zip file will be saved.
+                                    Default is './output'.
+            - zip_filename (str): The name of the zip file to create. Default is 'images.zip'.
+
+            Returns:
+            - str: The path to the created zip file.
+        """
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        zip_path = os.path.join(output_folder, zip_filename)
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(input_folder):
+                for file in files:
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                        file_path = os.path.join(root, file)
+                        zipf.write(file_path, os.path.relpath(file_path, input_folder))
+
+        return zip_path
+
     def download_image(self, url: str):
         """
             Downloads an image from a given URL and saves it to the specified path.
@@ -413,14 +443,14 @@ class NewsCrawlerBot:
         """
         if url is None:
             return None
-        
-        save_dir = os.path.join(os.getcwd(), 'output')
+
+        save_dir = os.path.join(os.getcwd(), 'output', 'images')
         os.makedirs(save_dir, exist_ok=True)
         existing_files = os.listdir(save_dir)
-        image_count = sum(1 for file in existing_files if file.startswith("image_") and file.endswith(".jpg"))
+        image_count = sum(
+            1 for file in existing_files if file.startswith("image_") and file.endswith(".jpg"))
         image_name = f"image_{image_count + 1}.jpg"
         save_path = os.path.join(save_dir, image_name)
-        
         try:
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()  # Check if the request was successful
