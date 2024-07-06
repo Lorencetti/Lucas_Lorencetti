@@ -107,6 +107,8 @@ class NewsCrawlerBot:
             Select the news according to its date and the time_option, and save its content on a dictionary.
         """
         try:
+            self.selenium_instance.wait_until_page_contains_element(
+                locator="xpath://div[@class='SearchResultsModule-results']//div[@class='PageList-items']//div[@class='PageList-items-item']")
             news_from_page = self.selenium_instance.get_webelements(
                 "xpath://div[@class='SearchResultsModule-results']//div[@class='PageList-items']//div[@class='PageList-items-item']")
             for article in news_from_page:
@@ -200,7 +202,7 @@ class NewsCrawlerBot:
 
     def get_every_news(self):
         """
-        Get the news from every page after the initial category has been searched.
+            Get the news from every page after the initial category has been searched.
         """
         try:
             page_index_text = self.selenium_instance.get_webelement(
