@@ -216,6 +216,7 @@ class NewsCrawlerBot:
             logger.warning("Stopped getting the news reason: %s", e)
 
         self.zip_images_folder("./output/images")
+        self.save_to_excel(self.news_list)
         # Not needed for this project, but this function would generate the output of images
         # and the excel files as a Work Item on robocloud.
         # self.create_output_work_item()
